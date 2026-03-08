@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tenatra EV — Simulation Bench</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Google Maps JavaScript API  -->
+  <!-- Replace YOUR_KEY with your actual key from .env / backend proxy -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_KEY&libraries=geometry,places" defer></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/simulation.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ───────────────────────────────────────────── -->
+  <header id="app-header">
+    <div class="logo-row">
+      <div class="logo-icon">
+      <img src="assets/logo.png" alt="Tenatra logo">
+      </div>
+      <div>
+        <div class="logo-text">tenatra<span class="logo-dot">.</span></div>
+        <div class="logo-sub">EV Simulation</div>
+      </div>
+    </div>
+
+    <div class="header-stats">
+      <div class="stat-badge"><div class="stat-val green" id="hdr-cars">0</div><div class="stat-lbl">Fleet</div></div>
+      <div class="stat-badge"><div class="stat-val cyan"  id="hdr-routing">0</div><div class="stat-lbl">Routing</div></div>
+      <div class="stat-badge"><div class="stat-val amber" id="hdr-charging">0</div><div class="stat-lbl">Charging</div></div>
+      <div class="stat-badge"><div class="stat-val green" id="hdr-stations">0</div><div class="stat-lbl">Stations</div></div>
+      <!-- <div class="stat-badge"><div class="stat-val red"   id="hdr-critical">0</div><div class="stat-lbl">Critical</div></div> -->
+    </div>
+
+    <div class="header-controls">
+      <!-- Map mode toggle -->
+      <div class="toggle-group">
+        <button class="toggle-btn" id="btn-dummy-mode" onclick="setMapMode('dummy')">Dummy Map</button>
+        <button class="toggle-btn active" id="btn-canvas-mode" onclick="setMapMode('canvas')">Sim Map</button>
+        <button class="toggle-btn"        id="btn-gmaps-mode"  onclick="setMapMode('gmaps')">Google Maps</button>
+      </div>
+
+      <!-- Sim speed -->
+      <div class="speed-group">
+        <span class="speed-label">SPEED</span>
+        <button class="speed-btn" onclick="setSpeed(0.5)">½×</button>
+        <button class="speed-btn" onclick="setSpeed(1)">1×</button>
+        <button class="speed-btn" onclick="setSpeed(2)">2×</button>
+      </div> 
+
+      <!-- Algorithm selector -->
+      <select id="algo-select" onchange="setAlgo(this.value)">
+        <option value="astar">A* Pathfinding</option>
+        <option value="dijkstra">Dijkstra</option>
+        <option value="greedy">Greedy Best-First</option>
+      </select>
+
+      <button class="btn" onclick="addCar()">+ Car</button>
+      <button class="btn primary" id="sim-btn" onclick="toggleSim()">▶ Run Sim</button>
+      <button class="btn"         onclick="resetSim()">↺ Reset</button>
+      <button class="btn"         onclick="syncStations()">⟳ Sync DB</button>
+    </div>
+  </header>
+
+  <!-- ── MAIN LAYOUT ──────────────────────────────────────── -->
+  <div class="main-layout">
+
+    <!-- LEFT PANEL: Car controls + Fleet list -->
+    <aside class="panel panel-left">
+      <div class="panel-section" id="selected-car-section">
+        <div class="panel-title">Selected Car</div>
+        <div id="car-controls-area">
+          <p class="placeholder-text">Click a car on the map to control it</p>
+        </div>
+      </div>
+
+      <div class="panel-divider">
+        <div class="panel-title">Fleet</div>
+      </div>
+
+      <div class="scroll-area" id="car-list"></div>
+    </aside>
+
+    <!-- CENTER: Canvas sim map OR Google Maps iframe -->
+    <main class="map-container" id="map-container">
+
+      <!-- Canvas layers (sim mode) -->
+      <canvas id="bg-canvas"></canvas>
+      <canvas id="main-canvas"></canvas>
+
+      <!-- Google Maps overlay (gmaps mode, hidden by default) -->
+      <div id="gmaps-container" class="hidden"></div>
+
+      <!-- HUD: top-right overlay cards -->
+      <div class="hud-sidebar" id="hud-sidebar">
+      <button class="hud-toggle" id="hud-toggle" onclick="toggleHUD()">
+     <span id="hud-toggle-icon">◀</span>
+     </button>
+    <div class="hud-content">
+<!-- <div class="map-hud" id="map-hud"> -->
+        <div class="hud-card">
+          <div class="hud-title">Active Algorithm</div>
+          <div class="hud-algo-name" id="algo-name">A* Pathfinding</div>
+          <div class="hud-detail"    id="algo-detail">Heuristic: Euclidean distance</div>
+          <div class="hud-stat"      id="algo-stats"></div>
+        </div>
+        <div class="hud-card">
+          <div class="hud-title">Data Structures</div>
+          <div class="hud-detail cyan">▸ KD-Tree: Station lookup</div>
+          <div class="hud-detail cyan">▸ R-Tree: Spatial indexing</div>
+          <div class="hud-detail cyan">▸ Min-Heap: Priority queue</div>
+        </div>
+        <div class="hud-card">
+          <div class="hud-title">API Status</div>
+          <div class="hud-detail" id="api-status-text">● Disconnected</div>
+          <div class="hud-detail muted" style="margin-top:3px;font-size:9px">Last sync: <span id="last-sync-time">—</span></div>
+        </div>
+      </div>
+      </div>
+      <!-- Mode legend: bottom-center pill -->
+      <div class="mode-bar">
+        <span class="mode-item"><span class="dot green"></span>Idle</span>
+        <span class="mode-item"><span class="dot cyan"></span>Routing</span>
+        <span class="mode-item"><span class="dot amber"></span>Charging</span>
+        <span class="mode-item"><span class="dot red"></span>Critical &lt;20%</span>
+        <span class="mode-sep">|</span>
+        <span class="mode-hint">Right-click for options · Click map to set destination</span>
+      </div>
+
+      <!-- Floating tooltip -->
+      <div class="map-tooltip" id="tooltip"></div>
+
+      <!-- Context menu -->
+      <div class="ctx-menu hidden" id="ctx-menu"></div>
+    </main>
+
+    <!-- RIGHT PANEL: Stations + Event log -->
+    <aside class="panel panel-right">
+      <div class="panel-section">
+        <div class="panel-title">Charging Stations</div>
+        <button class="add-btn" onclick="addStation()">+ Install Station</button>
+      </div>
+
+      <div class="scroll-area station-scroll" id="station-list"></div>
+
+      <div class="panel-section log-header">
+        <div class="panel-title">Event Log</div>
+      </div>
+      <div class="scroll-area log-scroll" id="log-panel"></div>
+    </aside>
+
+  </div><!-- /.main-layout -->
+
+  <!-- ── SCRIPTS (order matters) ──────────────────────────── -->
+  <!-- 1. Algorithms (no dependencies) -->
+  <script src="js/algorithms/graph.js"></script>
+  <script src="js/algorithms/astar.js"></script>
+  <script src="js/algorithms/dijkstra.js"></script>
+  <script src="js/algorithms/greedy.js"></script>
+  <script src="js/algorithms/kdtree.js"></script>
+  <script src="js/algorithms/stationSelector.js"></script>
+
+  <!-- 2. Core modules -->
+  <script src="js/simulation.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/dummySim.js"></script>
+  <!-- 3. Main boot (depends on all above) -->
+  <script src="js/main.js"></script>
+
+</body>
+</html>
