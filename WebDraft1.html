@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EV Routing Simulation — Algorithm Test Bench</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --surface3: #1c2330;
+    --border: #30363d;
+    --accent: #00ff9d;
+    --accent2: #00b8ff;
+    --accent3: #ff6b35;
+    --warn: #ffd700;
+    --danger: #ff3b3b;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --road: #1a2030;
+    --road-line: #2a3040;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .header-stats {
+    display: flex;
+    gap: 20px;
+  }
+
+  .stat-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .stat-badge .val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .stat-badge .lbl {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .header-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+  .btn.primary:hover { background: #00cc7a; }
+  .btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .btn.warn { background: var(--warn); color: #000; border-color: var(--warn); }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .panel-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* Car list */
+  .car-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    flex: 1;
+    padding: 12px;
+  }
+
+  .car-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .car-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 3px 0 0 3px;
+  }
+
+  .car-card.selected { border-color: var(--accent); background: #0d2d1e; }
+  .car-card.selected::before { background: var(--accent); }
+  .car-card.charging::before { background: var(--warn); }
+  .car-card.routing::before { background: var(--accent2); }
+  .car-card.idle::before { background: var(--muted); }
+  .car-card.critical::before { background: var(--danger); }
+
+  .car-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .car-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .car-status-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-idle { background: #2a2a2a; color: var(--muted); }
+  .badge-routing { background: #0d2040; color: var(--accent2); }
+  .badge-charging { background: #2d2400; color: var(--warn); }
+  .badge-critical { background: #2d0808; color: var(--danger); }
+  .badge-arrived { background: #0d2d1e; color: var(--accent); }
+
+  .battery-bar {
+    height: 6px;
+    background: var(--surface3);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .battery-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease, background 0.3s;
+  }
+
+  .battery-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .battery-pct { color: var(--text); font-weight: 700; }
+
+  /* Controls for selected car */
+  .car-controls {
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 0;
+  }
+
+  .ctrl-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .slider {
+    flex: 1;
+    height: 4px;
+    appearance: none;
+    background: var(--surface3);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .slider-val {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    width: 36px;
+    text-align: right;
+  }
+
+  .add-btn {
+    width: 100%;
+    padding: 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 6px;
+  }
+
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* MAP */
+  .map-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  /* Overlay HUD */
+  .map-hud {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 5;
+  }
+
+  .hud-card {
+    background: rgba(13,17,23,0.9);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    backdrop-filter: blur(8px);
+    min-width: 180px;
+  }
+
+  .hud-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .algo-info {
+    font-size: 11px;
+    color: var(--accent2);
+    margin-bottom: 4px;
+  }
+
+  .algo-detail {
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* LOG */
+  .right-panel {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .log-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .log-entry {
+    font-size: 10px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    border-left: 2px solid transparent;
+    line-height: 1.5;
+  }
+
+  .log-info { border-color: var(--accent2); color: var(--muted); }
+  .log-warn { border-color: var(--warn); color: var(--warn); background: rgba(255,215,0,0.05); }
+  .log-critical { border-color: var(--danger); color: var(--danger); background: rgba(255,59,59,0.05); }
+  .log-success { border-color: var(--accent); color: var(--accent); background: rgba(0,255,157,0.05); }
+
+  .log-time { color: var(--muted); margin-right: 4px; font-size: 9px; }
+
+  /* Station panel */
+  .station-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+  }
+
+  .station-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 10px;
+  }
+
+  .station-card.full { border-color: #ff3b3b33; }
+  .station-card.available { border-color: #00ff9d22; }
+
+  .station-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+
+  .station-name { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; }
+
+  .slots {
+    display: flex;
+    gap: 3px;
+  }
+
+  .slot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+  }
+
+  .slot.occupied { background: var(--danger); border-color: var(--danger); }
+  .slot.available { background: var(--accent); border-color: var(--accent); }
+
+  .station-kw { color: var(--accent2); font-size: 9px; }
+  .station-dist { color: var(--muted); font-size: 9px; }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    background: rgba(13,17,23,0.95);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+    max-width: 200px;
+    line-height: 1.6;
+  }
+
+  .tooltip.visible { display: block; }
+  .tooltip-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 4px; color: var(--accent); }
+
+  /* Mode indicator */
+  .mode-bar {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(13,17,23,0.9);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--muted);
+    backdrop-filter: blur(8px);
+    z-index: 5;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .mode-item { display: flex; align-items: center; gap: 6px; }
+  .mode-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Speed control */
+  .speed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .speed-btn {
+    width: 24px; height: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .speed-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  select:hover { border-color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .drag-hint {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,255,157,0.1);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--accent);
+    z-index: 5;
+    animation: fadeInOut 3s ease forwards;
+    pointer-events: none;
+  }
+
+  @keyframes fadeInOut {
+    0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; }
+  }
+
+  .ctx-menu {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 200;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: none;
+  }
+
+  .ctx-menu.visible { display: block; }
+
+  .ctx-item {
+    padding: 7px 12px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .ctx-item:hover { background: var(--surface2); color: var(--accent); }
+  .ctx-item.danger { color: var(--danger); }
+  .ctx-item.danger:hover { background: #2d0808; }
+  .ctx-separator { height: 1px; background: var(--border); margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">EV<span>Route</span> SIM</div>
+      <div style="font-size:9px;color:var(--muted);letter-spacing:1px">ALGORITHM TEST BENCH v1.0</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="stat-badge"><div class="val" id="hdr-cars">0</div><div class="lbl">Cars</div></div>
+    <div class="stat-badge"><div class="val" id="hdr-routing">0</div><div class="lbl">Routing</div></div>
+    <div class="stat-badge"><div class="val" id="hdr-charging">0</div><div class="lbl">Charging</div></div>
+    <div class="stat-badge"><div class="val" id="hdr-stations">0</div><div class="lbl">Stations</div></div>
+    <div class="stat-badge"><div class="val" id="hdr-critical">0</div><div class="lbl">Critical</div></div>
+  </div>
+  <div class="header-controls">
+    <div class="speed-control">
+      <span style="font-size:10px;color:var(--muted)">SIM SPEED:</span>
+      <button class="speed-btn" onclick="setSpeed(0.5)">½×</button>
+      <button class="speed-btn" onclick="setSpeed(1)">1×</button>
+      <button class="speed-btn" onclick="setSpeed(2)">2×</button>
+      <button class="speed-btn" onclick="setSpeed(5)">5×</button>
+    </div>
+    <select id="algo-select" onchange="setAlgo(this.value)">
+      <option value="astar">A* Pathfinding</option>
+      <option value="dijkstra">Dijkstra</option>
+      <option value="greedy">Greedy Best-First</option>
+    </select>
+    <button class="btn" onclick="addCar()">+ Add Car</button>
+    <button class="btn primary" onclick="toggleSim()" id="sim-btn">▶ RUN SIM</button>
+    <button class="btn" onclick="resetSim()">↺ Reset</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-title">Selected Car Controls</div>
+      <div id="car-controls-area">
+        <div style="font-size:11px;color:var(--muted);text-align:center;padding:10px">
+          Click a car to select it
+        </div>
+      </div>
+    </div>
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+      <div class="panel-title">Fleet</div>
+    </div>
+    <div class="car-list" id="car-list"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-container" id="map-container">
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="main-canvas"></canvas>
+
+    <div class="map-hud">
+      <div class="hud-card">
+        <div class="hud-title">Active Algorithm</div>
+        <div class="algo-info" id="algo-name">A* Pathfinding</div>
+        <div class="algo-detail" id="algo-detail">Heuristic: Euclidean distance</div>
+        <div class="algo-detail" id="algo-stats" style="color:var(--accent);margin-top:4px"></div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-title">Data Structures</div>
+        <div class="algo-detail" style="color:var(--accent2)">▸ KD-Tree: Station lookup</div>
+        <div class="algo-detail" style="color:var(--accent2)">▸ R-Tree: Spatial indexing</div>
+        <div class="algo-detail" style="color:var(--accent2)">▸ Min-Heap: Priority queue</div>
+      </div>
+    </div>
+
+    <div class="mode-bar">
+      <div class="mode-item"><div class="mode-dot" style="background:var(--accent)"></div>IDLE</div>
+      <div class="mode-item"><div class="mode-dot" style="background:var(--accent2)"></div>ROUTING</div>
+      <div class="mode-item"><div class="mode-dot" style="background:var(--warn)"></div>CHARGING</div>
+      <div class="mode-item"><div class="mode-dot" style="background:var(--danger)"></div>CRITICAL &lt;20%</div>
+      <span style="color:var(--border)">|</span>
+      <span style="font-size:9px">RIGHT-CLICK car or station for options</span>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+    <div class="ctx-menu" id="ctx-menu"></div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel-section">
+      <div class="panel-title">Charging Stations</div>
+      <button class="add-btn" onclick="addStation()">+ Add Station</button>
+    </div>
+    <div class="station-list" id="station-list"></div>
+    <div style="border-top:1px solid var(--border)">
+      <div style="padding:8px 12px;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase">Event Log</div>
+      <div class="log-panel" id="log-panel" style="max-height:200px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SIMULATION ENGINE
+// ============================================================
+
+const canvas = document.getElementById('main-canvas');
+const bgCanvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+const bgCtx = bgCanvas.getContext('2d');
+const container = document.getElementById('map-container');
+
+let W, H;
+let simRunning = false;
+let simSpeed = 1;
+let currentAlgo = 'astar';
+let selectedCar = null;
+let dragCar = null;
+let dragOffset = { x: 0, y: 0 };
+let lastTime = 0;
+let frame = 0;
+let totalPathsFound = 0;
+
+const BATTERY_DRAIN_RATE = 0.003; // % per pixel per second
+const CHARGE_RATE = 15; // % per second
+const CRITICAL_THRESHOLD = 20;
+const LOW_THRESHOLD = 35;
+
+// ── COLORS ──
+const COLORS = {
+  cars: ['#00ff9d','#00b8ff','#ff6b35','#ffd700','#b388ff','#ff80ab','#80deea','#ffcc02'],
+};
+
+let cars = [];
+let stations = [];
+let carIdCounter = 0;
+let stationIdCounter = 0;
+
+// ── ROAD NETWORK ──
+// Simple grid-based roads for realistic routing
+let roads = [];
+
+function initRoads() {
+  roads = [];
+  // Horizontal roads
+  const hRows = [0.15, 0.3, 0.5, 0.7, 0.85];
+  const vCols = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95];
+  hRows.forEach(r => {
+    roads.push({ x1: 0, y1: r * H, x2: W, y2: r * H, horiz: true });
+  });
+  vCols.forEach(c => {
+    roads.push({ x1: c * W, y1: 0, x2: c * W, y2: H, horiz: false });
+  });
+  // Diagonal/curved expressways
+  roads.push({ x1: 0, y1: H * 0.6, x2: W * 0.4, y2: H * 0.15, horiz: false, express: true });
+  roads.push({ x1: W * 0.6, y1: H * 0.85, x2: W, y2: H * 0.3, horiz: false, express: true });
+}
+
+// Grid nodes for pathfinding
+let nodes = [];
+let nodeMap = {};
+
+function buildGraph() {
+  nodes = [];
+  nodeMap = {};
+  const hRows = [0.15, 0.3, 0.5, 0.7, 0.85];
+  const vCols = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95];
+  
+  hRows.forEach((r, ri) => {
+    vCols.forEach((c, ci) => {
+      const id = `${ri}_${ci}`;
+      const n = { id, x: c * W, y: r * H, neighbors: [] };
+      nodes.push(n);
+      nodeMap[id] = n;
+    });
+  });
+
+  // Connect neighbors
+  hRows.forEach((r, ri) => {
+    vCols.forEach((c, ci) => {
+      const n = nodeMap[`${ri}_${ci}`];
+      if (ci < vCols.length - 1) {
+        const nr = nodeMap[`${ri}_${ci + 1}`];
+        n.neighbors.push(nr);
+        nr.neighbors.push(n);
+      }
+      if (ri < hRows.length - 1) {
+        const nr = nodeMap[`${ri + 1}_${ci}`];
+        n.neighbors.push(nr);
+        nr.neighbors.push(n);
+      }
+    });
+  });
+}
+
+// ── A* PATHFINDING ──
+function heuristic(a, b, algo) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  if (algo === 'dijkstra') return 0;
+  if (algo === 'greedy') return Math.sqrt(dx*dx + dy*dy) * 2;
+  return Math.sqrt(dx*dx + dy*dy); // A*
+}
+
+function findPath(startX, startY, endX, endY) {
+  if (!nodes.length) return [];
+
+  // Find closest nodes
+  function nearest(x, y) {
+    let best = null, bestD = Infinity;
+    nodes.forEach(n => {
+      const d = (n.x-x)**2 + (n.y-y)**2;
+      if (d < bestD) { bestD = d; best = n; }
+    });
+    return best;
+  }
+
+  const start = nearest(startX, startY);
+  const end = nearest(endX, endY);
+  if (!start || !end || start === end) return [{ x: endX, y: endY }];
+
+  const open = new Set([start]);
+  const cameFrom = new Map();
+  const gScore = new Map();
+  const fScore = new Map();
+
+  nodes.forEach(n => { gScore.set(n, Infinity); fScore.set(n, Infinity); });
+  gScore.set(start, 0);
+  fScore.set(start, heuristic(start, end, currentAlgo));
+
+  let iterations = 0;
+
+  while (open.size > 0) {
+    iterations++;
+    if (iterations > 1000) break;
+
+    let current = null;
+    let lowestF = Infinity;
+    open.forEach(n => {
+      if (fScore.get(n) < lowestF) { lowestF = fScore.get(n); current = n; }
+    });
+
+    if (current === end) {
+      // Reconstruct path
+      const path = [];
+      let c = current;
+      while (c) {
+        path.unshift({ x: c.x, y: c.y });
+        c = cameFrom.get(c);
+      }
+      path.push({ x: endX, y: endY });
+      totalPathsFound++;
+      document.getElementById('algo-stats').textContent = `Paths computed: ${totalPathsFound} | Nodes: ${iterations}`;
+      return path;
+    }
+
+    open.delete(current);
+
+    current.neighbors.forEach(neighbor => {
+      const dx = current.x - neighbor.x, dy = current.y - neighbor.y;
+      const tentG = gScore.get(current) + Math.sqrt(dx*dx + dy*dy);
+      if (tentG < gScore.get(neighbor)) {
+        cameFrom.set(neighbor, current);
+        gScore.set(neighbor, tentG);
+        fScore.set(neighbor, tentG + heuristic(neighbor, end, currentAlgo));
+        open.add(neighbor);
+      }
+    });
+  }
+
+  return [{ x: endX, y: endY }];
+}
+
+// ── KD-TREE for station lookup ──
+class KDNode {
+  constructor(station, axis, left, right) {
+    this.station = station;
+    this.axis = axis;
+    this.left = left;
+    this.right = right;
+  }
+}
+
+function buildKDTree(pts, depth = 0) {
+  if (!pts.length) return null;
+  const axis = depth % 2;
+  pts.sort((a, b) => (axis === 0 ? a.x - b.x : a.y - b.y));
+  const mid = Math.floor(pts.length / 2);
+  return new KDNode(pts[mid], axis,
+    buildKDTree(pts.slice(0, mid), depth + 1),
+    buildKDTree(pts.slice(mid + 1), depth + 1));
+}
+
+function kdNearest(node, x, y, best = { dist: Infinity, station: null }) {
+  if (!node) return best;
+  const dx = node.station.x - x, dy = node.station.y - y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < best.dist && node.station.slots.some(s => !s.occupied)) {
+    best = { dist, station: node.station };
+  }
+  const axis = node.axis;
+  const diff = axis === 0 ? x - node.station.x : y - node.station.y;
+  const [first, second] = diff < 0 ? [node.left, node.right] : [node.right, node.left];
+  best = kdNearest(first, x, y, best);
+  if (Math.abs(diff) < best.dist) best = kdNearest(second, x, y, best);
+  return best;
+}
+
+function findNearestAvailableStation(car) {
+  if (!stations.length) return null;
+  const availableStations = stations.filter(s => s.slots.some(sl => !sl.occupied));
+  if (!availableStations.length) return null;
+
+  // Also consider direction to destination
+  const stationsWithScore = availableStations.map(s => {
+    const dx = s.x - car.x, dy = s.y - car.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Direction alignment bonus: prefer stations in direction of destination
+    let dirBonus = 1;
+    if (car.destX !== undefined) {
+      const toDest = Math.atan2(car.destY - car.y, car.destX - car.x);
+      const toStation = Math.atan2(dy, dx);
+      const angDiff = Math.abs(toDest - toStation);
+      dirBonus = 1 - (Math.min(angDiff, Math.PI * 2 - angDiff) / Math.PI) * 0.3;
+    }
+
+    return { station: s, score: dist / dirBonus };
+  });
+
+  stationsWithScore.sort((a, b) => a.score - b.score);
+  return stationsWithScore[0]?.station || null;
+}
+
+// ── STATION CREATION ──
+function createStation(x, y) {
+  const id = ++stationIdCounter;
+  const slots = 3;
+  const kw = [50, 100, 150, 350][Math.floor(Math.random() * 4)];
+  const station = {
+    id, x, y,
+    name: `ST-${String(id).padStart(3, '0')}`,
+    kw,
+    slots: Array.from({ length: slots }, () => ({ occupied: false, car: null })),
+    pulse: 0,
+  };
+  stations.push(station);
+  return station;
+}
+
+// ── CAR CREATION ──
+function createCar(x, y) {
+  const id = ++carIdCounter;
+  const color = COLORS.cars[(id - 1) % COLORS.cars.length];
+  const battery = 40 + Math.random() * 55;
+  const car = {
+    id,
+    name: `CAR-${String(id).padStart(3, '0')}`,
+    x, y,
+    color,
+    battery,
+    status: 'idle', // idle, routing, charging, arrived, critical
+    speed: 60 + Math.random() * 60, // px/s
+    path: [],
+    pathIdx: 0,
+    targetStation: null,
+    chargingSlot: null,
+    chargingTimer: 0,
+    trail: [],
+    pulseAnim: 0,
+    destX: x + (Math.random() - 0.5) * W * 0.8,
+    destY: y + (Math.random() - 0.5) * H * 0.8,
+    waitTimer: 0,
+    drainMultiplier: 0.8 + Math.random() * 0.4,
+  };
+  cars.push(car);
+  return car;
+}
+
+// ── RESIZE ──
+function resize() {
+  W = container.clientWidth;
+  H = container.clientHeight;
+  canvas.width = bgCanvas.width = W;
+  canvas.height = bgCanvas.height = H;
+  initRoads();
+  buildGraph();
+  drawBackground();
+}
+
+// ── BACKGROUND ──
+function drawBackground() {
+  bgCtx.fillStyle = '#080c10';
+  bgCtx.fillRect(0, 0, W, H);
+
+  // Grid
+  bgCtx.strokeStyle = '#0d1520';
+  bgCtx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    bgCtx.beginPath(); bgCtx.moveTo(x, 0); bgCtx.lineTo(x, H); bgCtx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    bgCtx.beginPath(); bgCtx.moveTo(0, y); bgCtx.lineTo(W, y); bgCtx.stroke();
+  }
+
+  // Roads
+  roads.forEach(road => {
+    bgCtx.strokeStyle = road.express ? '#1e2840' : '#141a25';
+    bgCtx.lineWidth = road.express ? 12 : 8;
+    bgCtx.lineCap = 'round';
+    bgCtx.beginPath();
+    bgCtx.moveTo(road.x1, road.y1);
+    bgCtx.lineTo(road.x2, road.y2);
+    bgCtx.stroke();
+
+    // Center line
+    bgCtx.strokeStyle = '#1e2d40';
+    bgCtx.lineWidth = 1;
+    bgCtx.setLineDash([10, 15]);
+    bgCtx.beginPath();
+    bgCtx.moveTo(road.x1, road.y1);
+    bgCtx.lineTo(road.x2, road.y2);
+    bgCtx.stroke();
+    bgCtx.setLineDash([]);
+  });
+
+  // Intersection dots
+  const hRows = [0.15, 0.3, 0.5, 0.7, 0.85];
+  const vCols = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95];
+  hRows.forEach(r => vCols.forEach(c => {
+    bgCtx.fillStyle = '#1a2535';
+    bgCtx.beginPath();
+    bgCtx.arc(c * W, r * H, 5, 0, Math.PI * 2);
+    bgCtx.fill();
+  }));
+}
+
+// ── DRAW MAIN ──
+function draw(dt) {
+  ctx.clearRect(0, 0, W, H);
+  frame++;
+
+  // Draw paths
+  cars.forEach(car => {
+    if (car.path.length > car.pathIdx) {
+      ctx.strokeStyle = car.color + '30';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(car.x, car.y);
+      for (let i = car.pathIdx; i < car.path.length; i++) {
+        ctx.lineTo(car.path[i].x, car.path[i].y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Destination marker
+      if (car.targetStation) {
+        const t = car.targetStation;
+        ctx.strokeStyle = car.color + '60';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 8]);
+        ctx.beginPath();
+        ctx.moveTo(t.x, t.y);
+        ctx.lineTo(car.destX, car.destY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  });
+
+  // Draw trails
+  cars.forEach(car => {
+    if (car.trail.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(car.trail[0].x, car.trail[0].y);
+      for (let i = 1; i < car.trail.length; i++) {
+        ctx.lineTo(car.trail[i].x, car.trail[i].y);
+      }
+      ctx.strokeStyle = car.color + '25';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+
+  // Draw stations
+  stations.forEach(s => {
+    s.pulse = (s.pulse + dt * 2) % (Math.PI * 2);
+    const occupied = s.slots.filter(sl => sl.occupied).length;
+    const total = s.slots.length;
+    const full = occupied === total;
+
+    // Pulse ring
+    if (!full) {
+      const pulseR = 22 + Math.sin(s.pulse) * 4;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, pulseR, 0, Math.PI * 2);
+      ctx.strokeStyle = full ? '#ff3b3b20' : '#00ff9d15';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Station body
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 16, 0, Math.PI * 2);
+    ctx.fillStyle = full ? '#1a0808' : '#0a1a10';
+    ctx.fill();
+    ctx.strokeStyle = full ? '#ff3b3b' : '#00ff9d';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Lightning bolt icon
+    ctx.fillStyle = full ? '#ff6b6b' : '#00ff9d';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚡', s.x, s.y);
+
+    // Station name
+    ctx.fillStyle = '#7d8590';
+    ctx.font = '9px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.name, s.x, s.y + 24);
+
+    // Slot indicators
+    s.slots.forEach((slot, i) => {
+      const sx = s.x - (s.slots.length - 1) * 5 + i * 10;
+      const sy = s.y + 32;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = slot.occupied ? '#ff3b3b' : '#00ff9d';
+      ctx.fill();
+    });
+
+    // KW label
+    ctx.fillStyle = '#00b8ff80';
+    ctx.font = '8px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${s.kw}kW`, s.x, s.y - 22);
+  });
+
+  // Draw destination markers
+  cars.forEach(car => {
+    if (car.status === 'idle' || car.status === 'routing') {
+      ctx.strokeStyle = car.color + '40';
+      ctx.lineWidth = 1;
+      const dx = car.destX, dy = car.destY;
+      ctx.beginPath();
+      ctx.moveTo(dx - 8, dy - 8); ctx.lineTo(dx + 8, dy + 8);
+      ctx.moveTo(dx + 8, dy - 8); ctx.lineTo(dx - 8, dy + 8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(dx, dy, 12, 0, Math.PI * 2);
+      ctx.strokeStyle = car.color + '20';
+      ctx.stroke();
+    }
+  });
+
+  // Draw cars
+  cars.forEach(car => {
+    car.pulseAnim = (car.pulseAnim + dt * 3) % (Math.PI * 2);
+
+    const isSelected = selectedCar && selectedCar.id === car.id;
+    const battPct = car.battery / 100;
+    const battColor = battPct > 0.5 ? '#00ff9d' : battPct > 0.2 ? '#ffd700' : '#ff3b3b';
+
+    // Selection ring
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(car.x, car.y, 18 + Math.sin(car.pulseAnim) * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = car.color + '60';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Critical pulse
+    if (car.battery < CRITICAL_THRESHOLD) {
+      ctx.beginPath();
+      ctx.arc(car.x, car.y, 16 + Math.sin(car.pulseAnim * 3) * 6, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff3b3b' + Math.floor(40 + Math.sin(car.pulseAnim * 3) * 40).toString(16).padStart(2, '0');
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Car body (rounded square)
+    const r = 10;
+    ctx.beginPath();
+    ctx.roundRect(car.x - r, car.y - r, r * 2, r * 2, 4);
+    ctx.fillStyle = car.color + '20';
+    ctx.fill();
+    ctx.strokeStyle = car.color;
+    ctx.lineWidth = isSelected ? 2.5 : 2;
+    ctx.stroke();
+
+    // Car icon
+    ctx.fillStyle = car.color;
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚗', car.x, car.y);
+
+    // Battery bar above car
+    const barW = 24, barH = 4;
+    ctx.fillStyle = '#1c2330';
+    ctx.fillRect(car.x - barW/2, car.y - 20, barW, barH);
+    ctx.fillStyle = battColor;
+    ctx.fillRect(car.x - barW/2, car.y - 20, barW * battPct, barH);
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(car.x - barW/2, car.y - 20, barW, barH);
+
+    // Name label
+    if (isSelected) {
+      ctx.fillStyle = car.color;
+      ctx.font = 'bold 9px Space Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(car.name, car.x, car.y + 22);
+      ctx.fillText(`${Math.round(car.battery)}%`, car.x, car.y + 31);
+    }
+
+    // Status dot
+    const dotColors = { idle: '#7d8590', routing: '#00b8ff', charging: '#ffd700', critical: '#ff3b3b', arrived: '#00ff9d' };
+    ctx.beginPath();
+    ctx.arc(car.x + 9, car.y - 9, 4, 0, Math.PI * 2);
+    ctx.fillStyle = dotColors[car.status] || '#7d8590';
+    ctx.fill();
+
+    // Charging animation
+    if (car.status === 'charging') {
+      const prog = (frame * 0.05) % 1;
+      ctx.beginPath();
+      ctx.arc(car.x, car.y, 13 + prog * 8, 0, Math.PI * 2);
+      ctx.strokeStyle = `#ffd700${Math.floor((1 - prog) * 120).toString(16).padStart(2, '0')}`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+
+  // Algorithm visualization (A* nodes explored)
+  if (simRunning && frame % 30 === 0 && currentAlgo === 'astar') {
+    // Show brief node exploration effect on routing cars
+    cars.filter(c => c.status === 'routing').forEach(car => {
+      if (car.path.length > 0 && Math.random() > 0.7) {
+        const node = nodes[Math.floor(Math.random() * nodes.length)];
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#00b8ff15';
+        ctx.fill();
+      }
+    });
+  }
+}
+
+// ── UPDATE SIMULATION ──
+function update(dt) {
+  if (!simRunning) return;
+
+  const scaledDt = dt * simSpeed;
+
+  cars.forEach(car => {
+    // Move along path
+    if ((car.status === 'routing' || car.status === 'idle') && car.path.length > car.pathIdx) {
+      const target = car.path[car.pathIdx];
+      const dx = target.x - car.x;
+      const dy = target.y - car.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const step = car.speed * scaledDt;
+
+      if (dist < step) {
+        car.x = target.x;
+        car.y = target.y;
+        car.pathIdx++;
+      } else {
+        car.x += (dx / dist) * step;
+        car.y += (dy / dist) * step;
+      }
+
+      // Trail
+      car.trail.push({ x: car.x, y: car.y });
+      if (car.trail.length > 40) car.trail.shift();
+
+      // Drain battery
+      car.battery -= BATTERY_DRAIN_RATE * step * car.drainMultiplier;
+      car.battery = Math.max(0, car.battery);
+
+      // Check if reached station
+      if (car.targetStation && car.pathIdx >= car.path.length) {
+        arriveAtStation(car);
+      }
+    }
+
+    // Charging
+    if (car.status === 'charging') {
+      car.battery = Math.min(100, car.battery + CHARGE_RATE * scaledDt * (car.targetStation?.kw / 100 || 1));
+      car.chargingTimer += scaledDt;
+
+      if (car.battery >= 90) {
+        finishCharging(car);
+      }
+    }
+
+    // Critical battery - find nearest station
+    if (car.battery < CRITICAL_THRESHOLD && car.status === 'idle') {
+      if (car.battery !== car._lastCriticalBattery) {
+        log(`🔴 ${car.name} battery CRITICAL at ${Math.round(car.battery)}%`, 'critical');
+        car._lastCriticalBattery = Math.round(car.battery);
+      }
+      routeToNearestStation(car);
+    }
+
+    // Low battery - suggest routing
+    if (car.battery < LOW_THRESHOLD && car.status === 'idle' && !car._routingStarted) {
+      car._routingStarted = true;
+      log(`⚠️ ${car.name} battery low (${Math.round(car.battery)}%), initiating routing`, 'warn');
+      routeToNearestStation(car);
+    }
+  });
+
+  updateUI();
+}
+
+function routeToNearestStation(car) {
+  const station = findNearestAvailableStation(car);
+  if (!station) {
+    log(`❌ ${car.name}: No available stations found!`, 'critical');
+    return;
+  }
+
+  car.targetStation = station;
+  car.status = 'routing';
+  car.path = findPath(car.x, car.y, station.x, station.y);
+  car.pathIdx = 0;
+
+  log(`📍 ${car.name} → ${station.name} via ${currentAlgo.toUpperCase()} (${Math.round(Math.sqrt((station.x-car.x)**2+(station.y-car.y)**2))}px away)`, 'info');
+}
+
+function arriveAtStation(car) {
+  const station = car.targetStation;
+  if (!station) return;
+
+  // Find free slot
+  const slot = station.slots.find(s => !s.occupied);
+  if (!slot) {
+    // Station full, find another
+    log(`⚠️ ${car.name}: ${station.name} full, rerouting...`, 'warn');
+    car.targetStation = null;
+    car._routingStarted = false;
+    routeToNearestStation(car);
+    return;
+  }
+
+  slot.occupied = true;
+  slot.car = car;
+  car.chargingSlot = slot;
+  car.status = 'charging';
+  car.x = station.x + (Math.random() - 0.5) * 20;
+  car.y = station.y + (Math.random() - 0.5) * 20;
+  car.trail = [];
+  car.path = [];
+
+  log(`✅ ${car.name} charging at ${station.name} [${station.kw}kW]`, 'success');
+}
+
+function finishCharging(car) {
+  if (car.chargingSlot) {
+    car.chargingSlot.occupied = false;
+    car.chargingSlot.car = null;
+    car.chargingSlot = null;
+  }
+
+  car.status = 'idle';
+  car.targetStation = null;
+  car._routingStarted = false;
+  car._lastCriticalBattery = null;
+
+  // Set new random destination
+  car.destX = Math.random() * W * 0.9 + W * 0.05;
+  car.destY = Math.random() * H * 0.9 + H * 0.05;
+  car.path = findPath(car.x, car.y, car.destX, car.destY);
+  car.pathIdx = 0;
+
+  log(`🟢 ${car.name} fully charged (${Math.round(car.battery)}%), resuming journey`, 'success');
+}
+
+// ── LOGGING ──
+function log(msg, type = 'info') {
+  const panel = document.getElementById('log-panel');
+  const now = new Date();
+  const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  const el = document.createElement('div');
+  el.className = `log-entry log-${type}`;
+  el.innerHTML = `<span class="log-time">${time}</span>${msg}`;
+  panel.insertBefore(el, panel.firstChild);
+  if (panel.children.length > 50) panel.removeChild(panel.lastChild);
+}
+
+// ── HEADER STATS ──
+function updateUI() {
+  const routing = cars.filter(c => c.status === 'routing').length;
+  const charging = cars.filter(c => c.status === 'charging').length;
+  const critical = cars.filter(c => c.battery < CRITICAL_THRESHOLD).length;
+
+  document.getElementById('hdr-cars').textContent = cars.length;
+  document.getElementById('hdr-routing').textContent = routing;
+  document.getElementById('hdr-charging').textContent = charging;
+  document.getElementById('hdr-stations').textContent = stations.length;
+  document.getElementById('hdr-critical').textContent = critical;
+
+  updateCarList();
+  updateStationList();
+  updateCarControls();
+}
+
+function updateCarList() {
+  const list = document.getElementById('car-list');
+  list.innerHTML = '';
+
+  cars.forEach(car => {
+    const pct = car.battery;
+    const color = pct > 50 ? '#00ff9d' : pct > 20 ? '#ffd700' : '#ff3b3b';
+    const statusLabels = { idle: ['IDLE', 'badge-idle'], routing: ['ROUTING', 'badge-routing'], charging: ['CHARGING', 'badge-charging'], critical: ['CRITICAL', 'badge-critical'], arrived: ['ARRIVED', 'badge-arrived'] };
+    const [label, badgeClass] = statusLabels[pct < CRITICAL_THRESHOLD ? 'critical' : car.status] || ['IDLE', 'badge-idle'];
+    const isSelected = selectedCar?.id === car.id;
+    const statusClass = pct < CRITICAL_THRESHOLD ? 'critical' : car.status;
+
+    const card = document.createElement('div');
+    card.className = `car-card ${statusClass} ${isSelected ? 'selected' : ''}`;
+    card.innerHTML = `
+      <div class="car-header">
+        <div class="car-name" style="color:${car.color}">${car.name}</div>
+        <div class="car-status-badge ${badgeClass}">${label}</div>
+      </div>
+      <div class="battery-bar">
+        <div class="battery-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="battery-info">
+        <span class="battery-pct">${Math.round(pct)}%</span>
+        <span>${car.targetStation ? '→ ' + car.targetStation.name : car.status === 'charging' ? '⚡ Charging' : 'Destination set'}</span>
+      </div>`;
+
+    card.onclick = () => selectCar(car);
+    list.appendChild(card);
+  });
+}
+
+function updateStationList() {
+  const list = document.getElementById('station-list');
+  list.innerHTML = '';
+
+  stations.forEach(s => {
+    const occupied = s.slots.filter(sl => sl.occupied).length;
+    const full = occupied === s.slots.length;
+    const card = document.createElement('div');
+    card.className = `station-card ${full ? 'full' : 'available'}`;
+    card.innerHTML = `
+      <div class="station-header">
+        <div class="station-name">${s.name}</div>
+        <div class="slots">
+          ${s.slots.map(sl => `<div class="slot ${sl.occupied ? 'occupied' : 'available'}"></div>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span class="station-kw">${s.kw}kW DC Fast</span>
+        <span style="font-size:9px;color:${full ? 'var(--danger)' : 'var(--accent)'}">${full ? 'FULL' : `${s.slots.length - occupied} free`}</span>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function updateCarControls() {
+  const area = document.getElementById('car-controls-area');
+  if (!selectedCar) {
+    area.innerHTML = `<div style="font-size:11px;color:var(--muted);text-align:center;padding:10px">Click a car on the map to control it</div>`;
+    return;
+  }
+  const car = cars.find(c => c.id === selectedCar.id);
+  if (!car) return;
+
+  area.innerHTML = `
+    <div class="car-controls">
+      <div style="font-size:12px;font-family:'Syne',sans-serif;font-weight:700;color:${car.color};margin-bottom:10px">${car.name}</div>
+      <label class="ctrl-label">Battery %</label>
+      <div class="ctrl-row">
+        <input type="range" class="slider" min="0" max="100" value="${Math.round(car.battery)}" 
+          oninput="setBattery(${car.id}, this.value); this.nextElementSibling.textContent=this.value+'%'">
+        <span class="slider-val">${Math.round(car.battery)}%</span>
+      </div>
+      <label class="ctrl-label">Speed (px/s)</label>
+      <div class="ctrl-row">
+        <input type="range" class="slider" min="20" max="300" value="${Math.round(car.speed)}" 
+          oninput="setCarSpeed(${car.id}, this.value); this.nextElementSibling.textContent=this.value">
+        <span class="slider-val">${Math.round(car.speed)}</span>
+      </div>
+      <label class="ctrl-label">Drain Rate</label>
+      <div class="ctrl-row">
+        <input type="range" class="slider" min="0.2" max="3" step="0.1" value="${car.drainMultiplier.toFixed(1)}" 
+          oninput="car && (cars.find(c=>c.id===${car.id}).drainMultiplier=+this.value); this.nextElementSibling.textContent=this.value+'×'">
+        <span class="slider-val">${car.drainMultiplier.toFixed(1)}×</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button class="btn" style="flex:1;font-size:10px" onclick="routeCarNow(${car.id})">⚡ Route Now</button>
+        <button class="btn danger" style="flex:1;font-size:10px" onclick="removeCar(${car.id})">✕ Remove</button>
+      </div>
+    </div>`;
+}
+
+function selectCar(car) {
+  selectedCar = car;
+  updateCarControls();
+  updateCarList();
+}
+
+function setBattery(carId, pct) {
+  const car = cars.find(c => c.id === carId);
+  if (car) {
+    car.battery = +pct;
+    if (car.status === 'charging' && +pct < 85) {
+      // Keep charging status
+    }
+    log(`🔋 ${car.name} battery set to ${pct}%`, 'info');
+  }
+}
+
+function setCarSpeed(carId, speed) {
+  const car = cars.find(c => c.id === carId);
+  if (car) car.speed = +speed;
+}
+
+function routeCarNow(carId) {
+  const car = cars.find(c => c.id === carId);
+  if (!car) return;
+  if (car.status === 'charging') {
+    finishCharging(car);
+  }
+  car._routingStarted = false;
+  car.status = 'idle';
+  routeToNearestStation(car);
+}
+
+function removeCar(carId) {
+  const car = cars.find(c => c.id === carId);
+  if (car) {
+    if (car.chargingSlot) {
+      car.chargingSlot.occupied = false;
+      car.chargingSlot.car = null;
+    }
+    log(`🗑️ ${car.name} removed from simulation`, 'info');
+    cars = cars.filter(c => c.id !== carId);
+    if (selectedCar?.id === carId) selectedCar = null;
+  }
+  updateUI();
+}
+
+// ── INIT ──
+function initSim() {
+  // Add starter stations
+  const stationPositions = [
+    [0.25, 0.3], [0.55, 0.15], [0.7, 0.5], [0.4, 0.7],
+    [0.85, 0.3], [0.15, 0.7], [0.55, 0.85], [0.9, 0.7],
+  ];
+  stationPositions.forEach(([x, y]) => createStation(x * W, y * H));
+
+  // Add starter cars
+  const carPositions = [
+    [0.1, 0.2], [0.5, 0.4], [0.8, 0.6], [0.3, 0.8],
+  ];
+  carPositions.forEach(([x, y]) => {
+    const car = createCar(x * W, y * H);
+    car.battery = 25 + Math.random() * 65;
+    car.destX = Math.random() * W * 0.8 + W * 0.1;
+    car.destY = Math.random() * H * 0.8 + H * 0.1;
+    car.path = findPath(car.x, car.y, car.destX, car.destY);
+  });
+
+  log('🚀 EV Route Simulation initialized', 'success');
+  log(`📡 KD-Tree built with ${stations.length} stations`, 'info');
+  log(`🗺️ Road graph: ${nodes.length} nodes, A* ready`, 'info');
+  updateUI();
+}
+
+function addCar() {
+  const x = W * 0.1 + Math.random() * W * 0.8;
+  const y = H * 0.1 + Math.random() * H * 0.8;
+  const car = createCar(x, y);
+  car.destX = Math.random() * W * 0.8 + W * 0.1;
+  car.destY = Math.random() * H * 0.8 + H * 0.1;
+  car.path = findPath(car.x, car.y, car.destX, car.destY);
+  log(`🚗 ${car.name} added to fleet`, 'info');
+  updateUI();
+}
+
+function addStation() {
+  const x = W * 0.1 + Math.random() * W * 0.8;
+  const y = H * 0.1 + Math.random() * H * 0.8;
+  const s = createStation(x, y);
+  log(`⚡ ${s.name} (${s.kw}kW) installed`, 'success');
+  updateUI();
+}
+
+function toggleSim() {
+  simRunning = !simRunning;
+  const btn = document.getElementById('sim-btn');
+  btn.textContent = simRunning ? '⏸ PAUSE' : '▶ RUN SIM';
+  btn.className = simRunning ? 'btn danger' : 'btn primary';
+  log(simRunning ? '▶ Simulation started' : '⏸ Simulation paused', 'info');
+}
+
+function resetSim() {
+  simRunning = false;
+  cars = [];
+  stations = [];
+  carIdCounter = 0;
+  stationIdCounter = 0;
+  selectedCar = null;
+  totalPathsFound = 0;
+  document.getElementById('sim-btn').textContent = '▶ RUN SIM';
+  document.getElementById('sim-btn').className = 'btn primary';
+  document.getElementById('algo-stats').textContent = '';
+  document.getElementById('log-panel').innerHTML = '';
+  initSim();
+}
+
+function setSpeed(s) {
+  simSpeed = s;
+  log(`⏩ Simulation speed: ${s}×`, 'info');
+}
+
+function setAlgo(algo) {
+  currentAlgo = algo;
+  const names = { astar: 'A* Pathfinding', dijkstra: 'Dijkstra', greedy: 'Greedy Best-First' };
+  const details = { astar: 'Heuristic: Euclidean distance', dijkstra: 'Heuristic: None (optimal)', greedy: 'Heuristic: 2× Euclidean (fast)' };
+  document.getElementById('algo-name').textContent = names[algo];
+  document.getElementById('algo-detail').textContent = details[algo];
+  log(`🧠 Algorithm switched to ${names[algo]}`, 'info');
+  // Re-route all routing cars
+  cars.filter(c => c.status === 'routing').forEach(car => {
+    if (car.targetStation) {
+      car.path = findPath(car.x, car.y, car.targetStation.x, car.targetStation.y);
+      car.pathIdx = 0;
+    }
+  });
+}
+
+// ── DRAG & INTERACTION ──
+let mouseX = 0, mouseY = 0;
+let isDragging = false;
+let contextTarget = null;
+
+canvas.addEventListener('mousedown', e => {
+  const { x, y } = getCanvasPos(e);
+  mouseX = x; mouseY = y;
+
+  // Check if clicking a car
+  for (const car of cars) {
+    if (Math.sqrt((car.x - x) ** 2 + (car.y - y) ** 2) < 14) {
+      if (e.button === 0) {
+        dragCar = car;
+        dragOffset = { x: car.x - x, y: car.y - y };
+        selectCar(car);
+        isDragging = true;
+      }
+      return;
+    }
+  }
+
+  // Click on map = set destination for selected car
+  if (selectedCar && e.button === 0) {
+    const car = cars.find(c => c.id === selectedCar.id);
+    if (car && car.status !== 'charging') {
+      car.destX = x;
+      car.destY = y;
+      car.path = findPath(car.x, car.y, x, y);
+      car.pathIdx = 0;
+      car.status = 'idle';
+      car.targetStation = null;
+      car._routingStarted = false;
+      log(`📍 ${car.name} destination updated`, 'info');
+    }
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const { x, y } = getCanvasPos(e);
+  mouseX = x; mouseY = y;
+
+  if (dragCar && isDragging) {
+    dragCar.x = x + dragOffset.x;
+    dragCar.y = y + dragOffset.y;
+    dragCar.trail = [];
+    return;
+  }
+
+  // Tooltip
+  const tooltip = document.getElementById('tooltip');
+  let found = false;
+
+  for (const car of cars) {
+    if (Math.sqrt((car.x - x) ** 2 + (car.y - y) ** 2) < 14) {
+      tooltip.innerHTML = `<div class="tooltip-title" style="color:${car.color}">${car.name}</div>
+        Battery: ${Math.round(car.battery)}%<br>
+        Status: ${car.status}<br>
+        Speed: ${Math.round(car.speed)} px/s<br>
+        ${car.targetStation ? 'Target: ' + car.targetStation.name : 'No target'}`;
+      tooltip.style.left = (e.offsetX + 15) + 'px';
+      tooltip.style.top = (e.offsetY - 10) + 'px';
+      tooltip.className = 'tooltip visible';
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) for (const s of stations) {
+    if (Math.sqrt((s.x - x) ** 2 + (s.y - y) ** 2) < 18) {
+      const occ = s.slots.filter(sl => sl.occupied).length;
+      tooltip.innerHTML = `<div class="tooltip-title">${s.name}</div>
+        Power: ${s.kw}kW<br>
+        Slots: ${occ}/${s.slots.length} occupied<br>
+        Status: ${occ === s.slots.length ? '🔴 FULL' : '🟢 Available'}`;
+      tooltip.style.left = (e.offsetX + 15) + 'px';
+      tooltip.style.top = (e.offsetY - 10) + 'px';
+      tooltip.className = 'tooltip visible';
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) tooltip.className = 'tooltip';
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (dragCar && isDragging) {
+    log(`🚗 ${dragCar.name} moved to (${Math.round(dragCar.x)}, ${Math.round(dragCar.y)})`, 'info');
+    if (dragCar.status !== 'charging') {
+      dragCar.path = [];
+      dragCar.pathIdx = 0;
+      dragCar.targetStation = null;
+      dragCar._routingStarted = false;
+    }
+  }
+  dragCar = null;
+  isDragging = false;
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const { x, y } = getCanvasPos(e);
+  const menu = document.getElementById('ctx-menu');
+  menu.innerHTML = '';
+  contextTarget = null;
+
+  // Check car
+  for (const car of cars) {
+    if (Math.sqrt((car.x - x) ** 2 + (car.y - y) ** 2) < 14) {
+      contextTarget = { type: 'car', obj: car };
+      menu.innerHTML = `
+        <div class="ctx-item" onclick="routeCarNow(${car.id});hideMenu()">⚡ Route to nearest station</div>
+        <div class="ctx-item" onclick="setBattery(${car.id},10);hideMenu()">🔋 Set battery to 10%</div>
+        <div class="ctx-item" onclick="setBattery(${car.id},50);hideMenu()">🔋 Set battery to 50%</div>
+        <div class="ctx-item" onclick="setBattery(${car.id},100);hideMenu()">🔋 Full charge</div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item danger" onclick="removeCar(${car.id});hideMenu()">✕ Remove car</div>`;
+      break;
+    }
+  }
+
+  // Check station
+  if (!contextTarget) for (const s of stations) {
+    if (Math.sqrt((s.x - x) ** 2 + (s.y - y) ** 2) < 18) {
+      contextTarget = { type: 'station', obj: s };
+      menu.innerHTML = `
+        <div class="ctx-item" onclick="clearStation(${s.id});hideMenu()">🔓 Clear all slots</div>
+        <div class="ctx-item" onclick="blockStation(${s.id});hideMenu()">🔒 Block all slots</div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item danger" onclick="removeStation(${s.id});hideMenu()">✕ Remove station</div>`;
+      break;
+    }
+  }
+
+  if (!contextTarget) {
+    menu.innerHTML = `
+      <div class="ctx-item" onclick="addCarAt(${Math.round(x)},${Math.round(y)});hideMenu()">🚗 Add car here</div>
+      <div class="ctx-item" onclick="addStationAt(${Math.round(x)},${Math.round(y)});hideMenu()">⚡ Add station here</div>`;
+  }
+
+  menu.style.left = e.offsetX + 'px';
+  menu.style.top = e.offsetY + 'px';
+  menu.className = 'ctx-menu visible';
+});
+
+document.addEventListener('click', hideMenu);
+function hideMenu() { document.getElementById('ctx-menu').className = 'ctx-menu'; }
+
+function addCarAt(x, y) {
+  const car = createCar(x, y);
+  car.destX = Math.random() * W * 0.8 + W * 0.1;
+  car.destY = Math.random() * H * 0.8 + H * 0.1;
+  car.path = findPath(car.x, car.y, car.destX, car.destY);
+  log(`🚗 ${car.name} spawned at (${x}, ${y})`, 'info');
+  updateUI();
+}
+
+function addStationAt(x, y) {
+  const s = createStation(x, y);
+  log(`⚡ ${s.name} (${s.kw}kW) installed at (${x}, ${y})`, 'success');
+  updateUI();
+}
+
+function clearStation(id) {
+  const s = stations.find(st => st.id === id);
+  if (s) {
+    s.slots.forEach(sl => {
+      if (sl.car) { sl.car.status = 'idle'; sl.car.chargingSlot = null; sl.car.targetStation = null; }
+      sl.occupied = false; sl.car = null;
+    });
+    log(`🔓 ${s.name} slots cleared`, 'info');
+  }
+  updateUI();
+}
+
+function blockStation(id) {
+  const s = stations.find(st => st.id === id);
+  if (s) {
+    s.slots.forEach(sl => { sl.occupied = true; });
+    log(`🔒 ${s.name} blocked (simulating maintenance)`, 'warn');
+  }
+  updateUI();
+}
+
+function removeStation(id) {
+  const s = stations.find(st => st.id === id);
+  if (s) {
+    s.slots.forEach(sl => {
+      if (sl.car) { sl.car.status = 'idle'; sl.car.chargingSlot = null; sl.car.targetStation = null; sl.car._routingStarted = false; }
+    });
+    stations = stations.filter(st => st.id !== id);
+    cars.filter(c => c.targetStation?.id === id).forEach(c => { c.targetStation = null; c.status = 'idle'; c._routingStarted = false; });
+    log(`🗑️ ${s.name} removed`, 'warn');
+  }
+  updateUI();
+}
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+// ── MAIN LOOP ──
+function loop(ts) {
+  const dt = Math.min((ts - lastTime) / 1000, 0.1);
+  lastTime = ts;
+  update(dt);
+  draw(dt);
+  requestAnimationFrame(loop);
+}
+
+// ── STARTUP ──
+window.addEventListener('resize', () => {
+  resize();
+  drawBackground();
+});
+
+resize();
+initSim();
+requestAnimationFrame(ts => { lastTime = ts; loop(ts); });
+
+// Show hint
+setTimeout(() => {
+  const hint = document.createElement('div');
+  hint.className = 'drag-hint';
+  hint.textContent = 'Tip: Drag cars to move them • Right-click for options • Click map to set destination';
+  container.appendChild(hint);
+  setTimeout(() => hint.remove(), 3500);
+}, 1000);
+</script>
+</body>
+</html>
