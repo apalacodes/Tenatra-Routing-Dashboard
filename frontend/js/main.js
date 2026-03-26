@@ -80,7 +80,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // GAME LOOP
 // ─────────────────────────────────────────────────────────
 function gameLoop(ts) {
-  if (DummySim.isActive()) {
+  if (DummySim.isActive() || mapMode === 'gmaps') {
     lastTimestamp = ts; // keep timestamp fresh for when we resume
     requestAnimationFrame(gameLoop);
     return;
@@ -127,6 +127,11 @@ function setMapMode(mode) {
     DummySim.deactivate();
   }
 
+  // Deactivate GMap sim if leaving gmaps mode
+  if (prev === 'gmaps' && mode !== 'gmaps') {
+    GMapSim.deactivate();
+  }
+
   if (mode === 'dummy') {
     // Stop main game loop from drawing while dummy is active
     Sim.setSimRunning(false);
@@ -141,6 +146,9 @@ function setMapMode(mode) {
     gmapsDiv.classList.remove('hidden');
     if (searchBar) searchBar.classList.remove('hidden');
     initGoogleMap();
+    // Activate GMapSim once the map exists (defer one frame so the Map
+    // constructor has a chance to run before we start placing markers)
+    requestAnimationFrame(() => GMapSim.activate());
   } else {
     bgCanvasEl.style.opacity   = '1';
     mainCanvasEl.style.opacity = '1';
@@ -332,6 +340,7 @@ function setApiStatus(state) {
 // ─────────────────────────────────────────────────────────
 function toggleSim() {
   if (DummySim.isActive()) { DummySim.toggleSim(); return; }
+  if (mapMode === 'gmaps') { GMapSim.toggleSim();  return; }
   const running = !Sim.isRunning();
   Sim.setSimRunning(running);
   const btn = document.getElementById('sim-btn');
@@ -342,6 +351,7 @@ function toggleSim() {
 
 function resetSim() {
   if (DummySim.isActive()) { DummySim.resetSim(); return; }
+  if (mapMode === 'gmaps') { GMapSim.resetSim();  return; }
   Sim.reset();
   Sim.setSimRunning(false);
   Interactions.selectCar(null);
@@ -358,12 +368,13 @@ function resetSim() {
 }
 
 
-      function addCar()     { if (DummySim.isActive()) { DummySim.addCar();     return; } Sim.addCar();     refreshUI(); }
-      function addStation() { if (DummySim.isActive()) { DummySim.addStation(); return; } Sim.addStation(); refreshUI(); }
-      function setSpeed(v)  { if (DummySim.isActive()) { DummySim.setSpeed(v);  return; } Sim.setSpeed(v);  addLogEntry(`⏩ Speed: ${v}×`, 'info'); }
+      function addCar()     { if (DummySim.isActive()) { DummySim.addCar();     return; } if (mapMode === 'gmaps') { GMapSim.addCar();    return; } Sim.addCar();     refreshUI(); }
+      function addStation() { if (DummySim.isActive()) { DummySim.addStation(); return; } if (mapMode === 'gmaps') { return; }                         Sim.addStation(); refreshUI(); }
+      function setSpeed(v)  { if (DummySim.isActive()) { DummySim.setSpeed(v);  return; } if (mapMode === 'gmaps') { GMapSim.setSpeed(v); return; } Sim.setSpeed(v);  addLogEntry(`⏩ Speed: ${v}×`, 'info'); }
 
 function setAlgo(v) {
   if (DummySim.isActive()) { DummySim.setAlgo(v); return; }
+  if (mapMode === 'gmaps') { GMapSim.setAlgo(v);  return; }
   Sim.setAlgo(v);
   const names   = { astar:'A* Pathfinding', dijkstra:'Dijkstra', greedy:'Greedy Best-First' };
   const details = { astar:'Heuristic: Euclidean distance', dijkstra:'Heuristic: None (optimal)', greedy:'Heuristic: 2× Euclidean (fast)' };
