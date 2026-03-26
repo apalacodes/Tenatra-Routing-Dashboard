@@ -59,17 +59,20 @@ window.addEventListener('DOMContentLoaded', () => {
   Sim.init();
   refreshUI();
 
-  // 6. Fetch real stations from backend (replaces seed data)
+  // 6. Fetch real stations from AWS API (replaces seed data)
   fetchStationsFromBackend();
 
   // 7. Open WebSocket for live slot push updates
   connectWebSocket();
 
+  // 8. Init search & filter modules
+  initSearchAndFilter();
+
   addLogEntry('🚀 Tenatra EV Simulation ready', 'success');
-  // 8.Start in Dummy Sim mode (no API needed)
+  // 9. Start in Dummy Sim mode (no API needed)
   setMapMode('dummy');
 
-    // 9.Start game loop
+  // 10. Start game loop
   requestAnimationFrame(gameLoop);
 });
 
@@ -116,40 +119,46 @@ function setMapMode(mode) {
   document.getElementById('btn-dummy-mode').classList.toggle('active', mode === 'dummy');
   document.getElementById('btn-canvas-mode').classList.toggle('active', mode === 'canvas');
   document.getElementById('btn-gmaps-mode').classList.toggle('active',  mode === 'gmaps');
-   // Deactivate dummy sim if leaving it
-        if (prev === 'dummy' && mode !== 'dummy') {
-          DummySim.deactivate();
-        }
 
-        if (mode === 'dummy') {
-          // Stop main game loop from drawing while dummy is active
-          Sim.setSimRunning(false);
-          gmapsDiv.classList.add('hidden');
-          bgCanvasEl.style.opacity   = '1';
-          mainCanvasEl.style.opacity = '1';
-          requestAnimationFrame(() => DummySim.activate());
-        } else if (mode === 'gmaps') {
-          bgCanvasEl.style.opacity   = '0';
-          mainCanvasEl.style.opacity = '0.4'; // keep car overlay visible
-          gmapsDiv.classList.remove('hidden');
-          initGoogleMap();
-        } else {
-          bgCanvasEl.style.opacity   = '1';
-          mainCanvasEl.style.opacity = '1';
-          gmapsDiv.classList.add('hidden');
+  const searchBar = document.getElementById('map-search-bar');
 
-          Renderer.resize(mapContainer.clientWidth, mapContainer.clientHeight,
-            buildRoadSegments(mapContainer.clientWidth, mapContainer.clientHeight));
-        }
+  // Deactivate dummy sim if leaving it
+  if (prev === 'dummy' && mode !== 'dummy') {
+    DummySim.deactivate();
+  }
+
+  if (mode === 'dummy') {
+    // Stop main game loop from drawing while dummy is active
+    Sim.setSimRunning(false);
+    gmapsDiv.classList.add('hidden');
+    bgCanvasEl.style.opacity   = '1';
+    mainCanvasEl.style.opacity = '1';
+    if (searchBar) searchBar.classList.add('hidden');
+    requestAnimationFrame(() => DummySim.activate());
+  } else if (mode === 'gmaps') {
+    bgCanvasEl.style.opacity   = '0';
+    mainCanvasEl.style.opacity = '0.4'; // keep car overlay visible
+    gmapsDiv.classList.remove('hidden');
+    if (searchBar) searchBar.classList.remove('hidden');
+    initGoogleMap();
+  } else {
+    bgCanvasEl.style.opacity   = '1';
+    mainCanvasEl.style.opacity = '1';
+    gmapsDiv.classList.add('hidden');
+    if (searchBar) searchBar.classList.add('hidden');
+
+    Renderer.resize(mapContainer.clientWidth, mapContainer.clientHeight,
+      buildRoadSegments(mapContainer.clientWidth, mapContainer.clientHeight));
+  }
 
 }
 
 /**
- * Initialise a Google Maps instance centred on Kathmandu
- * (update the centre lat/lng and zoom to match your deployment region).
+ * Initialise a Google Maps instance centred on Kathmandu.
+ * Uses GoogleMapsModule and ClusterManager for marker rendering.
  */
 function initGoogleMap() {
-  if (googleMap) return; // already initialised
+  if (GoogleMapsModule.getMap()) return; // already initialised
 
   if (typeof google === 'undefined' || !google.maps) {
     addLogEntry('⚠️ Google Maps API not loaded — check your API key in index.html', 'warn');
@@ -159,26 +168,22 @@ function initGoogleMap() {
   const DEFAULT_CENTER = { lat: 27.7172, lng: 85.3240 }; // Kathmandu
   const DEFAULT_ZOOM   = 13;
 
-  googleMap = new google.maps.Map(gmapsDiv, {
-    center:    DEFAULT_CENTER,
-    zoom:      DEFAULT_ZOOM,
-    mapTypeId: 'roadmap',
-    styles:    GOOGLE_MAP_STYLES, // dark Tenatra theme defined below
-    disableDefaultUI: false,
-    gestureHandling:  'greedy',
-  });
+  const gmap = GoogleMapsModule.init(gmapsDiv, DEFAULT_CENTER, DEFAULT_ZOOM);
+  googleMap  = gmap;   // keep legacy reference for backward compat
+
+  // Attach ClusterManager to the new map
+  ClusterManager.setMap(gmap);
 
   // Wire the lat/lng ↔ canvas pixel converter
-  // Google Maps uses a Projection to map geo coords to pixel space.
-  google.maps.event.addListenerOnce(googleMap, 'tilesloaded', () => {
+  google.maps.event.addListenerOnce(gmap, 'tilesloaded', () => {
     Sim.setLatLngConverter((lat, lng) => {
-      const projection = googleMap.getProjection();
-      const bounds     = googleMap.getBounds();
+      const projection = gmap.getProjection();
+      const bounds     = gmap.getBounds();
       if (!projection || !bounds) return { x: 0, y: 0 };
 
       const topRight   = projection.fromLatLngToPoint(bounds.getNorthEast());
       const bottomLeft = projection.fromLatLngToPoint(bounds.getSouthWest());
-      const scale      = Math.pow(2, googleMap.getZoom());
+      const scale      = Math.pow(2, gmap.getZoom());
       const worldPoint = projection.fromLatLngToPoint(new google.maps.LatLng(lat, lng));
 
       return {
@@ -191,12 +196,18 @@ function initGoogleMap() {
     Sim.getStations()
       .filter(s => s.lat && s.lng)
       .forEach(s => {
-        const { x, y } = Sim.latLngToCanvas ? Sim.latLngToCanvas(s.lat, s.lng) : { x: s.x, y: s.y };
+        const { x, y } = Sim.latLngToCanvas(s.lat, s.lng);
         s.x = x; s.y = y;
       });
 
+    // Initial cluster render
+    _renderFilteredStations();
+
     addLogEntry('🗺️ Google Maps overlay active', 'success');
   });
+
+  // Re-render clusters on zoom change
+  gmap.addListener('zoom_changed', _renderFilteredStations);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -204,26 +215,34 @@ function initGoogleMap() {
 // ─────────────────────────────────────────────────────────
 
 /**
- * Fetch all stations from backend.
- * Your database rows must match the schema expected by
- * Sim.loadStationsFromDB() — see simulation.js for the mapping.
+ * Fetch all stations from the AWS API (same endpoint as the mobile app).
+ * Normalises via StationManager → loads into Sim → re-renders.
  */
 async function fetchStationsFromBackend() {
   try {
     setApiStatus('connecting');
-    const res  = await fetch(`${API_BASE}/stations`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const rawStations = await API.scanStations();
 
-    Sim.loadStationsFromDB(data.stations || data);
+    // Normalise into Sim schema via StationManager
+    const simStations = StationManager.ingest(rawStations);
+
+    // Load into simulation (replaces seed data)
+    Sim.loadStationsFromAPI(simStations);
     refreshUI();
+
+    // Rebuild filter panel with the real data
+    const gmap = GoogleMapsModule.getMap();
+    if (gmap) {
+      _buildFilterPanel();
+      _renderFilteredStations();
+    }
 
     setApiStatus('connected');
     document.getElementById('last-sync-time').textContent = new Date().toLocaleTimeString();
-    addLogEntry(`📡 Synced ${(data.stations||data).length} stations from database`, 'success');
+    addLogEntry(`📡 Synced ${simStations.length} charging stations from AWS API`, 'success');
   } catch (err) {
     setApiStatus('error');
-    addLogEntry(`⚠️ Backend sync failed: ${err.message}`, 'warn');
+    addLogEntry(`⚠️ AWS API sync failed: ${err.message}`, 'warn');
     addLogEntry('💡 Using simulated station data', 'info');
   }
 }
@@ -462,7 +481,8 @@ function refreshHeaderStats() {
   document.getElementById('hdr-routing').textContent  = cars.filter(c => c.status==='routing').length;
   document.getElementById('hdr-charging').textContent = cars.filter(c => c.status==='charging').length;
   document.getElementById('hdr-stations').textContent = stations.length;
-  document.getElementById('hdr-critical').textContent = cars.filter(c => c.battery<CRIT).length;
+  const critEl = document.getElementById('hdr-critical');
+  if (critEl) critEl.textContent = cars.filter(c => c.battery<CRIT).length;
 }
 
 function refreshStationList() {
@@ -521,6 +541,77 @@ function toggleHUD() {
   const icon    = document.getElementById('hud-toggle-icon');
   const collapsed = sidebar.classList.toggle('collapsed');
   icon.textContent = collapsed ? '▶' : '◀';
+}
+
+// ─────────────────────────────────────────────────────────
+// SEARCH & FILTER INTEGRATION
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Wire up SearchModule and FilterModule to the DOM elements
+ * added in index.html.  Called once on DOMContentLoaded.
+ */
+function initSearchAndFilter() {
+  const input      = document.getElementById('search-input');
+  const clearBtn   = document.getElementById('search-clear');
+  const loader     = document.getElementById('search-loader');
+  const searchIcon = document.getElementById('search-icon');
+  const filterBtn  = document.getElementById('filter-btn');
+  const filterPanel = document.getElementById('filter-panel');
+
+  if (!input || !filterBtn || !filterPanel) return;
+
+  SearchModule.init({
+    input,
+    clearBtn,
+    loader,
+    searchIcon,
+    onChange: (_query) => { _renderFilteredStations(); },
+    onSearch: (_query) => { _renderFilteredStations(); },
+  });
+
+  FilterModule.init({
+    btn:      filterBtn,
+    panel:    filterPanel,
+    onChange: (_filters) => { _renderFilteredStations(); },
+  });
+}
+
+/**
+ * Build (or rebuild) the filter panel from the current station data.
+ * Called after stations are loaded from the API.
+ */
+function _buildFilterPanel() {
+  const stations   = StationManager.getAll();
+  const plugTypes  = StationManager.getPlugTypes();
+  const operators  = StationManager.getOperators();
+  const maxPowerKw = Math.max(...stations.map(s => s.kw || 0), 350);
+  FilterModule.buildPanel(plugTypes, operators, maxPowerKw);
+}
+
+/**
+ * Apply current search query + filter state, then re-render
+ * the cluster / marker layer on Google Maps.
+ */
+function _renderFilteredStations() {
+  const gmap = GoogleMapsModule.getMap();
+  if (!gmap) return;
+
+  // Start from the full station list loaded into Sim
+  let stations = Sim.getStations().filter(s => s.lat && s.lng);
+
+  // Apply search
+  const query = SearchModule.getQuery();
+  if (query) {
+    stations = SearchModule.filterByQuery(stations, query);
+  }
+
+  // Apply filter panel state
+  const filters = FilterModule.getFilters();
+  stations = StationManager.applyFilters(stations, filters);
+
+  // Render with clustering
+  GoogleMapsModule.renderStations(stations);
 }
 
 // ─────────────────────────────────────────────────────────

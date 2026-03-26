@@ -381,6 +381,39 @@ const Sim = (() => {
   function pushSlotUpdate(station) { _pushSlotFn(station); }
 
   /**
+   * Ingest station data from the AWS API via StationManager.
+   * Uses the ChargingStation schema (Station_ID, Station_Name,
+   * Latitude, Longitude, …) already normalised by StationManager.ingest().
+   *
+   * @param {Object[]} simStations  Array already in Sim schema from StationManager
+   */
+  function loadStationsFromAPI(simStations) {
+    stations         = [];
+    stationIdCounter = 0;
+
+    simStations.forEach(s => {
+      const id = ++stationIdCounter;
+      stations.push({
+        id,
+        dbId:     s.dbId,
+        name:     s.name     || `ST-${String(id).padStart(3, '0')}`,
+        x:        s.x        || 0,
+        y:        s.y        || 0,
+        lat:      s.lat,
+        lng:      s.lng,
+        kw:       s.kw       || 50,
+        plugType: s.plugType || 'DC',
+        network:  s.network  || 'Unknown',
+        address:  s.address  || '',
+        slots:    s.slots    || Array.from({ length: 1 }, () => ({ occupied: false, car: null })),
+        _pulse:   0,
+      });
+    });
+
+    log(`📡 ${stations.length} stations loaded from AWS API`, 'success');
+  }
+
+  /**
    * Ingest station data from the backend database.
    * Maps DB schema → simulation station objects.
    *
@@ -487,7 +520,9 @@ const Sim = (() => {
 
     // DB integration
     loadStationsFromDB,
+    loadStationsFromAPI,
     applySlotUpdate,
+    latLngToCanvas,
 
     // Constants (read by renderer for color decisions)
     CRITICAL_THRESHOLD,
