@@ -32,9 +32,14 @@ let wsConnection  = null;     // WebSocket connection
 // ── Backend API base URL ──────────────────────────────────
 // In production replace with your actual domain.
 // During local dev the backend runs on :3001.
-const API_BASE = window.location.hostname === 'localhost'
+const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   ? 'http://localhost:3001/api'
   : '/api';  // same-origin in production
+
+// ── DynamoDB stations API (proxied through backend to avoid CORS) ─────────
+const DYNAMO_STATIONS_URL = `${API_BASE}/maps/dynamo-stations`;
+
+let gmapMarkers = []; // track markers so we can clear them on reset
 
 // ─────────────────────────────────────────────────────────
 // BOOT
@@ -196,7 +201,74 @@ function initGoogleMap() {
       });
 
     addLogEntry('🗺️ Google Maps overlay active', 'success');
+
+    // Fetch and plot real station data points from DynamoDB
+    plotDynamoStations();
   });
+}
+
+/**
+ * Fetch all stations from the DynamoDB API and drop markers on the Google Map.
+ * Each station record has: Station_ID, Station_Name, Latitude, Longitude,
+ * Operator, Power_kW, Plug_Type, District, Province, Country, Charging_Points
+ */
+async function plotDynamoStations() {
+  if (!googleMap) return;
+
+  try {
+    addLogEntry('📡 Fetching station data points…', 'info');
+    const res  = await fetch(DYNAMO_STATIONS_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // API returns an array directly or wrapped in a key
+    const stations = Array.isArray(data) ? data : (data.stations || data.data || []);
+
+    // Clear any previous markers
+    gmapMarkers.forEach(m => m.setMap(null));
+    gmapMarkers = [];
+
+    const infoWindow = new google.maps.InfoWindow();
+
+    stations.forEach(s => {
+      const lat = parseFloat(s.Latitude);
+      const lng = parseFloat(s.Longitude);
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      const marker = new google.maps.Marker({
+        position: { lat, lng },
+        map:      googleMap,
+        title:    s.Station_Name || s.Station_ID,
+        icon: {
+          path:        google.maps.SymbolPath.CIRCLE,
+          scale:       7,
+          fillColor:   '#2AE07A',
+          fillOpacity: 0.9,
+          strokeColor: '#04111A',
+          strokeWeight: 1.5,
+        },
+      });
+
+      marker.addListener('click', () => {
+        infoWindow.setContent(`
+          <div style="font-family:DM Sans,sans-serif;font-size:13px;line-height:1.6;color:#111">
+            <strong>${s.Station_Name || s.Station_ID}</strong><br>
+            🔌 ${s.Plug_Type || '—'}<br>
+            ⚡ ${s.Power_kW ? parseFloat(s.Power_kW) + ' kW' : '—'}<br>
+            🏢 ${s.Operator || '—'}<br>
+            📍 ${[s.District, s.Province, s.Country].filter(Boolean).join(', ')}
+          </div>
+        `);
+        infoWindow.open(googleMap, marker);
+      });
+
+      gmapMarkers.push(marker);
+    });
+
+    addLogEntry(`📍 Plotted ${gmapMarkers.length} stations on map`, 'success');
+  } catch (err) {
+    addLogEntry(`⚠️ Failed to load station data: ${err.message}`, 'warn');
+  }
 }
 
 // ─────────────────────────────────────────────────────────
