@@ -19,6 +19,9 @@
 const express      = require('express');
 const router       = express.Router();
 const googleMaps   = require('../services/googleMapsService');
+const https        = require('https');
+
+const DYNAMO_STATIONS_URL = 'https://i20hq7uqh4.execute-api.us-east-1.amazonaws.com/stations';
 
 // ── GET /api/maps/route ───────────────────────────────────
 router.get('/route', async (req, res) => {
@@ -52,6 +55,19 @@ router.get('/nearby-stations', async (req, res) => {
       lat: +lat, lng: +lng, radius: +radius,
     });
     res.json({ stations: places });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/maps/dynamo-stations ────────────────────────
+// Proxy for DynamoDB stations API to avoid browser CORS restrictions.
+router.get('/dynamo-stations', async (req, res) => {
+  try {
+    const response = await fetch(DYNAMO_STATIONS_URL);
+    if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
